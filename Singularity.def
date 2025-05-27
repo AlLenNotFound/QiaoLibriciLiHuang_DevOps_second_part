@@ -24,14 +24,15 @@ From: ubuntu:22.04
     cp lib/*.a /usr/lib
 
     # build your code
-    cd /opt/app
+    cd /opt/app/QiaoLibriciliHuang_DevOps_second_part
     mkdir -p build
+    rm -rf build/*
     cd build
     cmake ..
     make
 
 %files
-QiaoLibriciliHuang_DevOps_second_part /opt/app
+. /opt/app
 
 %environment
     export PATH=/opt/app/build:$PATH
