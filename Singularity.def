@@ -1,121 +1,45 @@
-# .github/workflows/build-test-containerize.yml
-name: build-test-containerize3
+Bootstrap: docker
+From: ubuntu:22.04 
+%labels
+    Author "yibo"
+    Version "1.0"
 
-on: [push, pull_request]
+%post
+    echo "APT update with retry..."
+    for i in 1 2 3; do
+        apt-get update && break || sleep 5
+    done
 
-jobs:
-  build:
-    runs-on: ubuntu-24.04
+    apt-get install -y \
+        build-essential \
+        cmake \
+        git \
+        libgtest-dev \
+        && rm -rf /var/lib/apt/lists/*
 
-    # -------------------------------------------------
-    # Variabili di JOB  → visibili in TUTTI gli step
-    # -------------------------------------------------
-    env:
-      SIF_NAME:     grayscale.sif
-      GALILEO_HOST: ${{ secrets.SLURM_HOST       || secrets.GALILEO_HOST }}
-      GALILEO_USER: ${{ secrets.SLURM_USER       || secrets.GALILEO_USER }}
-      GALILEO_KEY:  ${{ secrets.SLURM_PRIVATE_KEY|| secrets.GALILEO_KEY  }}
-      GALILEO_CERT: ${{ secrets.SSH_CERTIFICATE  || secrets.GALILEO_CERT }}
+    # build GTest
+    cd /usr/src/gtest
+    cmake -DCMAKE_CXX_FLAGS="-fPIC" .
+    make
+    cp lib/*.a /usr/lib
 
-    steps:
-    # -----------------------------------------------
-    # 1) Build & unit-test
-    # -----------------------------------------------
-    - uses: actions/checkout@v3
-      with:
-        submodules: recursive
+    # build your code
+    mkdir -p /opt/app/build
+    cd /opt/app/build
+    cmake ..
+    make
 
-    - name: Install build deps
-      run: |
-        sudo apt update
-        sudo apt install -y \
-          cmake g++ make \
-          uuid-dev libseccomp-dev pkg-config squashfs-tools cryptsetup \
-          dos2unix curl wget openssh-client singularity-container
+%files
+. /opt/app
 
-    - name: Convert line endings
-      run: dos2unix job.sh || true
+%environment
+    export PATH=/opt/app/build:$PATH
 
-    # -----------------------------------------------
-    # 2) Containerise
-    # -----------------------------------------------
-    - name: Build SIF
-      run: sudo singularity build "$SIF_NAME" Singularity.def
+%runscript
+    exec /opt/app/build/convert_grayscale "$@"
 
-    - name: Run tests in Singularity
-      run: |
-        singularity test "$SIF_NAME"
-
-    - name: Export test result
-      run: |
-        singularity exec "$SIF_NAME" cat /opt/app/test_output.txt > test_output.txt
-
-    - name: Upload test result
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-output
-        path: test_output.txt
-
-    - name: Upload grayscale.sif
-      uses: actions/upload-artifact@v4
-      with:
-        name: grayscale-sif
-        path: grayscale.sif
-
-    # ------------------------------------------------
-    # 3) Patch job script, copia su Galileo, sbatch
-    # ------------------------------------------------
-    - name: Patch SLURM paths
-      if: ${{ !github.event.pull_request }}
-      run: |
-        sed -i \
-          -e 's|^IN_HOST=.*|IN_HOST=$SCRATCH/seproject/images|' \
-          -e 's|^OUT_HOST=.*|OUT_HOST=$SCRATCH/seproject/result|' \
-          job.sh
-
-    - name: Copy SIF & submit job
-      if: ${{ !github.event.pull_request }}
-      run: |
-        set -euo pipefail
-
-        mkdir -p ~/.ssh
-        printf '%s\n' "$GALILEO_KEY" > ~/.ssh/my_key
-        chmod 600 ~/.ssh/my_key
-
-        if [[ -n "${GALILEO_CERT:-}" ]]; then
-          printf '%s\n' "$GALILEO_CERT" > ~/.ssh/my_key-cert.pub
-          chmod 644 ~/.ssh/my_key-cert.pub
-        fi
-
-        { echo "Host galileo"
-          echo "  HostName $GALILEO_HOST"
-          echo "  User $GALILEO_USER"
-          echo "  IdentityFile ~/.ssh/my_key"
-          echo "  IdentitiesOnly yes"
-          echo "  StrictHostKeyChecking no"
-          echo "  UserKnownHostsFile /dev/null"
-          [[ -n "${GALILEO_CERT:-}" ]] && \
-            echo "  CertificateFile ~/.ssh/my_key-cert.pub"
-        } > ~/.ssh/config
-        chmod 600 ~/.ssh/config
-
-        scp -F ~/.ssh/config "$SIF_NAME" job.sh galileo:~/seproject/
-
-        JOB_ID=$(ssh -F ~/.ssh/config galileo \
-                   "cd ~/seproject && sbatch job.sh" | awk '{print $4}')
-        echo "SLURM job id: $JOB_ID"
-
-        echo "Waiting for SLURM job $JOB_ID …"
-        while true; do
-          STATE=$(ssh -F ~/.ssh/config galileo \
-                    "sacct -j $JOB_ID -n -o State" | awk 'NR==1{print $1}')
-          [[ -z $STATE ]] && STATE=PENDING
-          echo "  -> current state: $STATE"
-          case "$STATE" in
-            PENDING|CONFIGURING|RUNNING|COMPLETING) sleep 20 ;;
-            COMPLETED) echo 'Job finished OK';  break ;;
-            FAILED|CANCELLED|TIMEOUT|NODE_FAIL|PREEMPTED)
-                      echo 'Job failed'; exit 1 ;;
-            *)        echo "Unknown state $STATE"; exit 2 ;;
-          esac
-        done
+%test
+    echo "=== Running tests ==="
+    cd /opt/app/build
+    ./test_grayscale > /opt/app/test_output.txt
+    cat /opt/app/test_output.txt
