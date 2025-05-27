@@ -14,7 +14,7 @@ jobs:
       SIF_NAME:     grayscale.sif
       GALILEO_HOST: ${{ secrets.SLURM_HOST       || secrets.GALILEO_HOST }}
       GALILEO_USER: ${{ secrets.SLURM_USER       || secrets.GALILEO_USER }}
-      GALILEO_KEY:  ${{ secrets.SLURM_PRIVATE_KEY|| secrets.GALILEO_KEY  }}
+      GALILEO_KEY:  ${{ secrets.SSH_PRIVATE_KEY|| secrets.GALILEO_KEY  }}
       GALILEO_CERT: ${{ secrets.SSH_CERTIFICATE  || secrets.GALILEO_CERT }}
 
     steps:
