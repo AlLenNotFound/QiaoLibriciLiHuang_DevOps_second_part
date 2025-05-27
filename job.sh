@@ -32,7 +32,10 @@ mkdir -p $SINGULARITY_TMPDIR $SINGULARITY_CACHEDIR
 # -------------------------
 # 执行程序（容器已放在当前目录）
 # -------------------------
+# 创建目录
+mkdir -p input output
 
+# 执行程序
 singularity exec ./grayscale.sif /opt/app/build/convert_grayscale input output Average
 
 singularity exec ./grayscale.sif /opt/app/build/test_grayscale > test_output.txt 2>&1
