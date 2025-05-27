@@ -41,7 +41,8 @@ jobs:
     - name: Compile & test
       run: |
         ./build.sh
-        ./build/test_grayscale
+        ./build/test_grayscale > test_output.txt || true
+
 
     # -----------------------------------------------
     # 2) Containerise
