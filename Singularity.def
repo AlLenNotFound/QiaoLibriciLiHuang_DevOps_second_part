@@ -24,7 +24,7 @@ From: ubuntu:22.04
     cp lib/*.a /usr/lib
 
     # build your code
-    cd /opt/app/QiaoLibriciliHuang_DevOps_second_part
+    cd /opt/app
     mkdir -p build
     rm -rf build/*
     cd build
