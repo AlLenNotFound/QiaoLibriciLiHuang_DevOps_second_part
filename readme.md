@@ -4,7 +4,7 @@
 
 This project provides a utility to convert `.ppm` images to `.pgm` format using various grayscale conversion methods. The tool processes all `.ppm` images in a specified input folder and saves the converted `.pgm` images in an output folder.
 
----
+--- 
 
 ## Features  
  
